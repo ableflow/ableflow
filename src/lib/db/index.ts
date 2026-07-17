@@ -8,9 +8,29 @@ import * as schema from "./schema";
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "ablelaw.db");
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+/**
+ * DB 연결 설정 결정:
+ * - Turso(클라우드): DATABASE_URL(또는 TURSO_DATABASE_URL)이 libsql:// 또는 https:// 이면 사용.
+ *   인증 토큰은 DATABASE_AUTH_TOKEN(또는 TURSO_AUTH_TOKEN).
+ * - 그 외(로컬 개발): data/ablelaw.db 파일 사용.
+ * Vercel 등 서버리스 환경은 파일시스템이 임시/읽기전용이므로 반드시 Turso를 사용해야 합니다.
+ */
+function resolveDbConfig(): { url: string; authToken?: string } {
+  const remoteUrl = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL;
+  if (remoteUrl && /^(libsql|https|wss):\/\//.test(remoteUrl)) {
+    return {
+      url: remoteUrl,
+      authToken: process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN,
+    };
+  }
+  // 로컬 파일 모드일 때만 data 디렉터리를 생성
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  return { url: `file:${DB_FILE}` };
 }
+
+const dbConfig = resolveDbConfig();
 
 // 개발 중 HMR 로 인스턴스가 중복 생성되는 것을 방지
 const globalForDb = globalThis as unknown as {
@@ -19,7 +39,7 @@ const globalForDb = globalThis as unknown as {
   __ready?: Promise<void>;
 };
 
-const client: Client = globalForDb.__libsql ?? createClient({ url: `file:${DB_FILE}` });
+const client: Client = globalForDb.__libsql ?? createClient(dbConfig);
 export const db: LibSQLDatabase<typeof schema> =
   globalForDb.__drizzle ?? drizzle(client, { schema });
 
