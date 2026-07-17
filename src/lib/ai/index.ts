@@ -1,8 +1,9 @@
 import "server-only";
 import { z } from "zod";
-import { getSettings } from "@/lib/settings";
+import { getSettings, type AppSettings } from "@/lib/settings";
 import { createAnthropicProvider } from "./anthropic";
 import { createOpenAiProvider } from "./openai";
+import { createGeminiProvider } from "./gemini";
 import { AiError, extractJson, type AiProvider } from "./provider";
 import {
   IssueAnalysisSchema,
@@ -15,12 +16,39 @@ import {
 import { issueAnalysisPrompt, comparisonPrompt, reportPrompt } from "./prompts";
 import type { NormalizedLegalSource } from "@/lib/law-api/types";
 
-export async function getProvider(): Promise<AiProvider> {
-  const s = await getSettings();
+/** 설정 기준 기본 제공사 (openai | anthropic) */
+function defaultProvider(s: AppSettings): AiProvider {
   if (s.aiProvider === "openai") {
     return createOpenAiProvider(s.openaiApiKey, s.aiModel || "gpt-4o-mini");
   }
   return createAnthropicProvider(s.anthropicApiKey, s.aiModel || "claude-3-5-sonnet-latest");
+}
+
+/**
+ * 대량 호출용 제공사 (쟁점 추출·자료 비교).
+ * 절충안: Gemini 키가 있으면 Gemini Flash(빠르고 저렴), 없으면 기본 제공사로 폴백.
+ */
+function bulkProvider(s: AppSettings): AiProvider {
+  if (s.geminiApiKey) {
+    return createGeminiProvider(s.geminiApiKey, s.geminiModel || "gemini-2.5-flash");
+  }
+  return defaultProvider(s);
+}
+
+/**
+ * 최종 종합검토용 제공사.
+ * 절충안: Claude 키가 있으면 Claude(법리 뉘앙스·안정성), 없으면 대량용 제공사로 폴백.
+ */
+function finalProvider(s: AppSettings): AiProvider {
+  if (s.anthropicApiKey) {
+    return createAnthropicProvider(s.anthropicApiKey, s.aiModel || "claude-3-5-sonnet-latest");
+  }
+  return bulkProvider(s);
+}
+
+/** 하위호환: 기존 호출부용 기본 제공사 */
+export async function getProvider(): Promise<AiProvider> {
+  return defaultProvider(await getSettings());
 }
 
 /**
@@ -58,7 +86,7 @@ export async function analyzeIssues(input: {
   question: string;
   field?: string;
 }): Promise<IssueAnalysis> {
-  const provider = await getProvider();
+  const provider = bulkProvider(await getSettings());
   return runJson(provider, issueAnalysisPrompt(input), IssueAnalysisSchema, 2048);
 }
 
@@ -67,7 +95,7 @@ export async function compareSource(input: {
   facts: string;
   source: NormalizedLegalSource;
 }): Promise<Comparison> {
-  const provider = await getProvider();
+  const provider = bulkProvider(await getSettings());
   return runJson(provider, comparisonPrompt(input), ComparisonSchema, 1500);
 }
 
@@ -77,7 +105,7 @@ export async function buildReport(input: {
   issues: string[];
   sources: { title: string; sourceType: string; summary?: string }[];
 }): Promise<Report> {
-  const provider = await getProvider();
+  const provider = finalProvider(await getSettings());
   return runJson(provider, reportPrompt(input), ReportSchema, 2500);
 }
 

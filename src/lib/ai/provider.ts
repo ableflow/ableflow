@@ -7,7 +7,7 @@ export interface AiCompletionParams {
 }
 
 export interface AiProvider {
-  name: "anthropic" | "openai";
+  name: "anthropic" | "openai" | "gemini";
   model: string;
   /** 텍스트 응답을 반환 (JSON 강제는 호출측에서 파싱/검증) */
   complete(params: AiCompletionParams): Promise<string>;

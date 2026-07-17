@@ -7,6 +7,8 @@ export interface AppSettings {
   aiProvider: "anthropic" | "openai";
   anthropicApiKey: string;
   openaiApiKey: string;
+  geminiApiKey: string; // 절충안: 대량 호출용 Gemini 키
+  geminiModel: string; // 대량 호출 모델 (기본 gemini-2.5-flash)
   aiModel: string;
   defaultDisplay: number; // 기본 검색 건수
   defaultSources: string[]; // 기본 검색 자료
@@ -17,11 +19,13 @@ export interface PublicSettings {
   lawApiOc: string;
   aiProvider: "anthropic" | "openai";
   aiModel: string;
+  geminiModel: string;
   defaultDisplay: number;
   defaultSources: string[];
   autoAnonymize: boolean;
   hasAnthropicKey: boolean;
   hasOpenaiKey: boolean;
+  hasGeminiKey: boolean;
 }
 
 const KEYS = {
@@ -29,6 +33,8 @@ const KEYS = {
   aiProvider: "AI_PROVIDER",
   anthropicApiKey: "ANTHROPIC_API_KEY",
   openaiApiKey: "OPENAI_API_KEY",
+  geminiApiKey: "GEMINI_API_KEY",
+  geminiModel: "GEMINI_MODEL",
   aiModel: "AI_MODEL",
   defaultDisplay: "DEFAULT_DISPLAY",
   defaultSources: "DEFAULT_SOURCES",
@@ -53,6 +59,8 @@ export async function getSettings(): Promise<AppSettings> {
     aiProvider: provider === "openai" ? "openai" : "anthropic",
     anthropicApiKey: s[KEYS.anthropicApiKey] ?? process.env.ANTHROPIC_API_KEY ?? "",
     openaiApiKey: s[KEYS.openaiApiKey] ?? process.env.OPENAI_API_KEY ?? "",
+    geminiApiKey: s[KEYS.geminiApiKey] ?? process.env.GEMINI_API_KEY ?? "",
+    geminiModel: s[KEYS.geminiModel] ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
     aiModel: s[KEYS.aiModel] ?? process.env.AI_MODEL ?? "claude-3-5-sonnet-latest",
     defaultDisplay: Number(s[KEYS.defaultDisplay] ?? "20") || 20,
     defaultSources: safeArr(s[KEYS.defaultSources]) ?? ["law", "prec"],
@@ -67,11 +75,13 @@ export async function getPublicSettings(): Promise<PublicSettings> {
     lawApiOc: s.lawApiOc,
     aiProvider: s.aiProvider,
     aiModel: s.aiModel,
+    geminiModel: s.geminiModel,
     defaultDisplay: s.defaultDisplay,
     defaultSources: s.defaultSources,
     autoAnonymize: s.autoAnonymize,
     hasAnthropicKey: Boolean(s.anthropicApiKey),
     hasOpenaiKey: Boolean(s.openaiApiKey),
+    hasGeminiKey: Boolean(s.geminiApiKey),
   };
 }
 
