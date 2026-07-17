@@ -23,11 +23,24 @@ function resolveDbConfig(): { url: string; authToken?: string } {
       authToken: process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN,
     };
   }
-  // 로컬 파일 모드일 때만 data 디렉터리를 생성
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  // 로컬 파일 모드: 프로젝트 data/ 를 우선 시도.
+  // Vercel 등 서버리스는 프로젝트 경로가 읽기전용이라 쓰기가 실패하므로,
+  // 그럴 때는 유일하게 쓰기 가능한 /tmp 로 폴백한다.
+  // (⚠️ /tmp 는 인스턴스마다 분리되고 콜드스타트 시 사라지는 임시 저장소 —
+  //  데이터 영속이 필요하면 DATABASE_URL 로 Turso 를 지정할 것)
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.accessSync(DATA_DIR, fs.constants.W_OK);
+    return { url: `file:${DB_FILE}` };
+  } catch {
+    const tmpDir = path.join("/tmp", "ablelaw-data");
+    try {
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    } catch {
+      /* /tmp 생성 실패 시 그대로 진행 (createClient 가 에러를 던짐) */
+    }
+    return { url: `file:${path.join(tmpDir, "ablelaw.db")}` };
   }
-  return { url: `file:${DB_FILE}` };
 }
 
 const dbConfig = resolveDbConfig();
